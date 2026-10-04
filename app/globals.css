@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: #f6f2ea;
+  color: #1e1a16;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular {
+  font-feature-settings: "tnum" 1;
+}
+
+*:focus-visible {
+  outline: 2px solid #1e4d3b;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: rgba(30, 77, 59, 0.18);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cfc2ae transparent;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+.react-flow__controls-button {
+  background: #fffdf9 !important;
+  border-bottom: 1px solid #e0d6c6 !important;
+  fill: #5a5148 !important;
+}
+
+/* New items entering a list (action stream, chat steps). */
+@keyframes ig-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.ig-enter {
+  animation: ig-enter 400ms ease-out;
+}
+
+/* Toast entering from the bottom-right. */
+@keyframes ig-toast {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.ig-toast {
+  animation: ig-toast 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Three-dot "working" indicator. */
+@keyframes ig-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+.ig-dots span {
+  animation: ig-dot 1.2s infinite ease-in-out;
+}
+.ig-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.ig-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ig-enter,
+  .ig-toast,
+  .ig-dots span {
+    animation: none;
+  }
+}

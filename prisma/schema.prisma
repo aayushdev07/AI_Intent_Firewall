@@ -1,0 +1,231 @@
+// IntentGuard — persistence model.
+// SQLite has no native JSON/enum support in Prisma, so structured fields are
+// stored as JSON strings and enumerations as validated strings (see lib/types).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now())
+  intents   Intent[]
+}
+
+/// The user's Original Intent. Becomes immutable once confirmed.
+model Intent {
+  id                      String     @id @default(cuid())
+  userId                  String
+  user                    User       @relation(fields: [userId], references: [id])
+  userRequest             String
+  goal                    String
+  constraints             String     @default("[]") // JSON IntentConstraint[]
+  allowedResources        String // JSON string[]
+  expectedActions         String // JSON string[]
+  restrictedActions       String // JSON string[]
+  sensitiveDataAllowed    Boolean
+  externalTransferAllowed Boolean
+  allowedDestinations     String // JSON string[]
+  budgetLimit             Float?
+  riskTolerance           String // low | medium | high
+  ambiguities             String // JSON string[]
+  parserSource            String // LLM | RULE_BASED
+  status                  String     @default("DRAFT") // DRAFT | CONFIRMED
+  /// TASK = the agent works on it; CHAT = a conversational reply, no agent and no tools.
+  kind                    String     @default("TASK")
+  /// Assistant reply for CHAT turns.
+  reply                   String?
+  immutable               Boolean    @default(false)
+  contentHash             String?
+  createdAt               DateTime   @default(now())
+  confirmedAt             DateTime?
+  conversationId          String?
+  conversation            Conversation? @relation(fields: [conversationId], references: [id])
+  runs                    AgentRun[]
+
+  @@index([conversationId])
+}
+
+model AgentRun {
+  id              String            @id @default(cuid())
+  intentId        String
+  intent          Intent            @relation(fields: [intentId], references: [id])
+  mode            String // LIVE | DEMO | SCRIPTED
+  scenario        String?
+  agentId         String            @default("worker-agent")
+  status          String            @default("RUNNING") // RUNNING | WAITING_APPROVAL | COMPLETED | HALTED | FAILED
+  finalDecision   String? // ALLOW | WARN | BLOCK
+  stepCount       Int               @default(0)
+  lastAgentNote   String?
+  startedAt       DateTime          @default(now())
+  endedAt         DateTime?
+  actions         Action[]
+  trajectory      Trajectory?
+  riskAssessments RiskAssessment[]
+  receipts        ActionReceipt[]
+  provenance      ProvenanceEvent[]
+  violations      PolicyViolation[]
+}
+
+model Action {
+  id              String            @id @default(cuid())
+  runId           String
+  run             AgentRun          @relation(fields: [runId], references: [id])
+  sequence        Int
+  toolName        String
+  arguments       String // JSON object
+  reason          String
+  agentId         String
+  parentActionId  String?
+  status          String // PROPOSED | ALLOWED | WARNED | BLOCKED | EXECUTED
+  alignmentScore  Float?
+  riskScore       Float?
+  riskLevel       String?
+  decision        String?
+  decisionReason  String?
+  integrityHash   String
+  authoritySource String
+  proposedBy      String // LLM | SCRIPTED | DEMO | API
+  result          String? // JSON — only after verified execution
+  resultMeta      String? // JSON — security-relevant flags of the result
+  createdAt       DateTime          @default(now())
+  executedAt      DateTime?
+  violations      PolicyViolation[]
+  approval        Approval?
+  receipt         ActionReceipt?
+  riskAssessment  RiskAssessment?
+}
+
+model Trajectory {
+  id        String   @id @default(cuid())
+  runId     String   @unique
+  run       AgentRun @relation(fields: [runId], references: [id])
+  sequence  String // JSON [{tool, decision}]
+  patterns  String // JSON string[]
+  maxRisk   Float    @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model RiskAssessment {
+  id             String   @id @default(cuid())
+  runId          String
+  run            AgentRun @relation(fields: [runId], references: [id])
+  actionId       String   @unique
+  action         Action   @relation(fields: [actionId], references: [id])
+  riskScore      Float
+  riskLevel      String
+  alignmentScore Float
+  factors        String // JSON [{label, points}]
+  createdAt      DateTime @default(now())
+}
+
+model Policy {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  description String
+  severity    String // HARD | SOFT | ESCALATE | INFO
+  enabled     Boolean @default(true)
+  order       Int
+}
+
+model PolicyViolation {
+  id         String   @id @default(cuid())
+  runId      String
+  run        AgentRun @relation(fields: [runId], references: [id])
+  actionId   String
+  action     Action   @relation(fields: [actionId], references: [id])
+  policyCode String
+  message    String
+  severity   String
+  createdAt  DateTime @default(now())
+}
+
+model Approval {
+  id        String    @id @default(cuid())
+  actionId  String    @unique
+  action    Action    @relation(fields: [actionId], references: [id])
+  decision  String    @default("PENDING") // PENDING | APPROVED | DENIED
+  scope     String    @default("SINGLE_ACTION")
+  decidedBy String?
+  note      String?
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+}
+
+model ActionReceipt {
+  id             String   @id @default(cuid())
+  receiptId      String   @unique
+  runId          String
+  run            AgentRun @relation(fields: [runId], references: [id])
+  actionId       String   @unique
+  action         Action   @relation(fields: [actionId], references: [id])
+  userIntent     String
+  agent          String
+  toolName       String
+  alignment      Float
+  risk           Float
+  riskLevel      String
+  decision       String
+  reason         String
+  violations     String // JSON string[]
+  executed       Boolean  @default(false)
+  approvalStatus String?
+  payload        String // JSON — full evaluation record
+  createdAt      DateTime @default(now())
+}
+
+model Tool {
+  id                            String  @id @default(cuid())
+  name                          String  @unique
+  description                   String
+  dataClassification            String
+  externalImpact                String
+  requiresExplicitAuthorization Boolean
+  riskWeight                    Int
+}
+
+model ProvenanceEvent {
+  id              String   @id @default(cuid())
+  runId           String
+  run             AgentRun @relation(fields: [runId], references: [id])
+  actionId        String?
+  actor           String
+  parent          String?
+  tool            String?
+  action          String
+  authoritySource String
+  createdAt       DateTime @default(now())
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+/// A chat thread. Each user message becomes one Original Intent (and, once confirmed, one agent run).
+/// Archiving hides a chat from the sidebar; its receipts stay in the audit log.
+model Conversation {
+  id        String   @id @default(cuid())
+  title     String
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  intents   Intent[]
+}
+
+/// Browser Web Push subscriptions used for risk alerts when the app is not open.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}
