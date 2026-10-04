@@ -11,9 +11,15 @@ export const CONFIG = { thresholds: DEFAULT_THRESHOLDS, security: DEFAULT_SECURI
 
 export function confirmedIntent(request: string): OriginalIntent {
   const d = parseIntentRuleBased(request);
-  return { ...d, id: "intent-test", createdAt: new Date(0).toISOString(), immutable: true };
-}
 
+  return {
+    ...d,
+    constraints: d.constraints ?? [],
+    id: "intent-test",
+    createdAt: new Date(0).toISOString(),
+    immutable: true,
+  };
+}
 /**
  * In-memory replica of the service loop (evaluate → guard → execute) so the
  * end-to-end security story can be tested without a database.
